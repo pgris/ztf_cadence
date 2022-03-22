@@ -1,0 +1,10 @@
+
+## input
+logObs data/2018_all_logs_from_dr1_rcid_zp_from_masci.csv str #log of observations
+
+## parameters
+nside 128 int #nside for healpix
+
+## output
+outDir . str #outputDir
+outFile OS.hdf5 str #output file name
