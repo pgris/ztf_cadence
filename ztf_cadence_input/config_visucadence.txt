@@ -1,0 +1,12 @@
+
+## input
+obsFile OS.hdf5 str #log of observations
+
+## parameters
+nproc 8 int #nproc for multiprocessing
+nside 128 int #nside for healpix
+displaytype per_night str #type of display (per_night, per_exposure)
+
+## output
+outDir plot_cadence str #outputDir
+outFile OS.mp4 str #output file name
