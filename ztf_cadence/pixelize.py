@@ -14,21 +14,27 @@ class Pixelize_sky:
        ra width of a quadrant (default: 0.85)
     width_dec: float, opt
        dec width of a quadrant (default: 0.85)
+    raCol: str, opt
+      name of the RA col for pixelizing (default: ra)
+    decCol: str, opt
+      name of the Dec col for pixelizing (default: dec) 
 
     """
 
-    def __init__(self, nside=128, width_ra=0.85, width_dec=0.85):
+    def __init__(self, nside=128, width_ra=0.85, width_dec=0.85, raCol='ra', decCol='dec'):
 
         self.nside = nside
         self.width_ra = width_ra
         self.width_dec = width_dec
+        self.raCol = raCol
+        self.decCol = decCol
 
     def __call__(self, df):
 
         dftot = pd.DataFrame()
 
         for i, dd in df.iterrows():
-            ppix = self.pixels(dd['ra'], dd['dec'])
+            ppix = self.pixels(dd[self.raCol], dd[self.decCol])
             if len(ppix) > 0:
                 dfa = pd.DataFrame(ppix, columns=['healpixID'])
                 dfa['field'] = dd['field']
@@ -70,8 +76,8 @@ class Pixelize_sky:
         ras = [ra_min, ra_min, ra_max, ra_max]
         decs = [dec_min, dec_max, dec_max, dec_min]
 
-        rr = pd.DataFrame(ras, columns=['ra'])
-        rr['dec'] = decs
-        arr = hp.ang2vec(rr['ra'], rr['dec'], lonlat=True)
+        rr = pd.DataFrame(ras, columns=[self.raCol])
+        rr[self.decCol] = decs
+        arr = hp.ang2vec(rr[self.raCol], rr[self.decCol], lonlat=True)
 
         return hp.query_polygon(self.nside, arr, nest=True)
