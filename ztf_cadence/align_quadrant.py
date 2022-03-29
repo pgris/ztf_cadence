@@ -322,7 +322,7 @@ def align_quad(fields, params={}, j=0, output_q=None):
         ndata_end = len(dfb)
         if ndata_end != ndata_orig:
             print('pb here', ndata_orig, ndata_end, field)
-            plot_quad(dfb)
+            plot_quad(sel, dfb)
         df = pd.concat((df, dfb))
 
     if output_q is not None:
