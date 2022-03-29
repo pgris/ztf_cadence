@@ -4,6 +4,7 @@ logObs data/2018_all_logs_from_dr1_rcid_zp_from_masci.csv str #log of observatio
 
 ## parameters
 nside 128 int #nside for healpix
+nproc 8 int #nproc for multiprocessing
 
 ## output
 outDir . str #outputDir
