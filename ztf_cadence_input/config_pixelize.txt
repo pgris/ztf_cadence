@@ -8,8 +8,8 @@ nproc 8 int #nproc for multiprocessing
 alignquads 1 int #to align quadrants before pixelizing
 RAmin 0. float #sky area - min RA
 RAmax 36. float #sky area - max RA
-Decmin -90. float #sky area - min Dec
-Decmax 90. float #sky area - max Dec
+Decmin -40. float #sky area - min Dec
+Decmax 89. float #sky area - max Dec
 width_RA 0.854 float #quadrant width - RA
 width_Dec 0.854 float #quadrant width - Dec
 
