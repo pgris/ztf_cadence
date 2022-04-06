@@ -37,14 +37,15 @@ class Pixelize_sky:
             time_ref = time.time()
             ppix = pixels(self.nside, dd[self.raCol], dd[self.decCol],
                           self.width_ra, self.width_dec)
-            """
+            
             if len(ppix) > 0:
-                 dfa = pd.DataFrame(ppix, columns=['healpixID'])
+                dfa = pd.DataFrame(ppix, columns=['healpixID'])
                 dfa['field'] = dd['field']
                 dfa['field'] = dfa['field'].astype(int)
                 dfa = dfa.merge(pd.DataFrame([dd]), left_on=[
                     'field'], right_on=['field'])
                 #dfa = dfa.drop_duplicates(subset=['healpixID'])
+                dftot = pd.concat((dftot, dfa))
             """
             dfa = pd.DataFrame([dd])
             if len(ppix) > 0:
@@ -53,6 +54,7 @@ class Pixelize_sky:
                 dfa['healpixID'] = ['None']
             #print('there man', dfa)
             dftot = pd.concat((dftot, dfa))
+            """
         return dftot
 
 
