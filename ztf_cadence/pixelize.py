@@ -37,7 +37,7 @@ class Pixelize_sky:
             time_ref = time.time()
             ppix = pixels(self.nside, dd[self.raCol], dd[self.decCol],
                           self.width_ra, self.width_dec)
-            
+            """
             if len(ppix) > 0:
                 dfa = pd.DataFrame(ppix, columns=['healpixID'])
                 dfa['field'] = dd['field']
@@ -54,7 +54,7 @@ class Pixelize_sky:
                 dfa['healpixID'] = ['None']
             #print('there man', dfa)
             dftot = pd.concat((dftot, dfa))
-            """
+           
         return dftot
 
 
