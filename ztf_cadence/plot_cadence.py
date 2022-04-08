@@ -24,13 +24,14 @@ class PlotOS:
         # get npixels
         self.npix = hp.nside2npix(nside=nside)
         colors = ['lightgrey', 'lightgreen', 'red', 'lightblue']
-        colors = ['gainsboro', 'lightgreen', 'red', 'blue']
+        self.colors = ['gainsboro', 'green', 'red', 'magenta']
         self.minx = 0
-        self.maxx = len(colors)
+        self.maxx = len(self.colors)
         self.norm = plt.cm.colors.Normalize(self.minx, self.maxx)
-        self.cmap = mpl.colors.ListedColormap(colors)
+        self.cmap = mpl.colors.ListedColormap(self.colors)
         self.cmap.set_under('w')
         self.outDir = outDir
+        self.pixArea = hp.nside2pixarea(nside, degrees=True)
 
     def visu(self, tab, vardisp='color', healpixId='healpixID', title='', inum=1, save=False):
         """
@@ -51,22 +52,49 @@ class PlotOS:
 
         """
         fig = plt.figure()
+        #fig, ax = plt.subplots()
+        ax = fig.add_axes([0, 0, 1, 1])
         hpxmap = np.zeros(self.npix, dtype=np.float)
         hpxmap += -1
         healpixIDs = np.unique(tab[healpixId])
         hpxmap[tab['healpixID'].astype(int)] = tab[vardisp]
 
+        ik = hpxmap > 1.
+        area = self.pixArea*len(hpxmap[ik])
+
+        title += ' - area {} deg$^2$'.format(int(area))
         hp.mollview(hpxmap, fig=fig, min=self.minx, max=self.maxx, cmap=self.cmap,
-                    title=title, nest=True, norm=self.norm)
+                    title=title, nest=True, norm=self.norm, cbar=False)
         hp.graticule(dpar=10., dmer=30.)
+
+        # define a new colorbar (no access to mollview one)
+        cax = fig.add_axes(
+            [ax.get_position().x0+0.2, ax.get_position().y0+0.05, ax.get_position().width-0.4, 0.05])
+        bounds = range(0, 5)
+        cb2 = mpl.colorbar.ColorbarBase(cax, cmap=self.cmap,
+                                        norm=self.norm,
+                                        boundaries=bounds,
+                                        ticks=bounds,
+                                        orientation='horizontal',
+                                        ticklocation='bottom')
+        cb2.ax.get_yaxis().set_ticks([])
+        cb2.ax.get_xaxis().set_ticks([])
+        for j, lab in enumerate(['previous', 'g', 'r', 'i']):
+            k = 0.5
+            if j == 0:
+                k = 0.3
+            cb2.ax.text(k+j, 0.80, lab)  # ha='center', va='center')
+
+        # hide axis
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        plt.axis('off')
 
         if save:
             figName = '{}/obs_{}'.format(self.outDir, inum)
             plt.savefig(figName)
-
-        # fig.colorbar(self.cmap)
-        plt.close(fig)
         # plt.show()
+        plt.close(fig)
 
 
 class PlotNights(PlotOS):
@@ -156,40 +184,19 @@ class PlotNights(PlotOS):
         self.visu(obs.to_records(index=False),
                   title=tit, inum=night, save=True)
 
-    def transform(self, data):
-
-        df = pd.DataFrame()
-
-        # get healpixIDs
-        hIDs = ','.join(data['healpixID'].to_list())
-        hIDs = set(hIDs.split(','))
-        if len(hIDs) == 0:
-            return df
-        print(hIDs)
-        if 'None' in hIDs:
-            hIDs.remove('None')
-
-        for hID in hIDs:
-            idx = data['healpixID'].str.contains(hID)
-            dd = pd.DataFrame(data[idx])
-            dd['healpixID'] = hID
-            df = pd.concat((df, dd))
-
-        return df
-
     def processNight(self, nights, params, j=0, output_q=None):
 
         run_type = params['run_type']
         for night in nights:
-            idx = self.data['night'] == night
-            obs_tonight = pd.DataFrame(self.data.loc[idx])
-            obs_tonight = pd.DataFrame(obs_tonight[['healpixID', 'color']])
-            obs_before = self.obs_night_before(
-                night, obs_tonight['healpixID'].to_list())
+            obs_night = self.obs_tonight(night)
+            pixels = []
+            if len(obs_night) > 0:
+                pixels = obs_night['healpixID'].to_list()
+            obs_before = self.obs_night_before(night, pixels)
 
             # obs_night = self.transform(self.data[idx])
 
-            obs_night = pd.concat((obs_tonight, obs_before))
+            obs_night = pd.concat((obs_night, obs_before))
 
             if run_type == 'per_night':
                 self.plot_night(obs_night, night)
@@ -206,15 +213,38 @@ class PlotNights(PlotOS):
         else:
             return 1
 
+    def obs_tonight(self, night):
+
+        idx = self.data['night'] == night
+        obs_night = self.data[idx]
+        obs = pd.DataFrame()
+        for b in obs_night['color'].unique():
+            io = obs_night['color'] == b
+            sel = obs_night[io]
+            dd = pd.DataFrame(self.get_hID(sel), columns=['healpixID'])
+            dd['color'] = b
+            obs = pd.concat((obs, dd))
+
+        return obs
+
     def obs_night_before(self, night, pixelList):
 
         ido = self.data['night'] < night
         obs_before = pd.DataFrame(self.data[ido])
         if len(obs_before) > 0:
             obs_before = pd.DataFrame(
-                obs_before['healpixID'].unique(), columns=['healpixID'])
+                self.get_hID(obs_before), columns=['healpixID'])
             obs_before['color'] = 0.5
             idx = obs_before['healpixID'].isin(pixelList)
             obs_before = obs_before[~idx]
 
         return obs_before
+
+    def get_hID(self, data):
+
+        hIDs = ','.join(data['healpixID'].to_list())
+        hIDs = set(hIDs.split(','))
+        if 'None' in hIDs:
+            hIDs.remove('None')
+
+        return hIDs
