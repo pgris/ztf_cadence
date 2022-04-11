@@ -87,7 +87,7 @@ cl = CadenceMetric()
 df1 = pd.DataFrame(columns=['healpixID','season','cad_all','nb_obs_all','gap_all','cad_ztfg','nb_obs_ztfg','gap_ztfg',
                            'cad_ztfr','nb_obs_ztfr','gap_ztfr','cad_ztfi','nb_obs_ztfi','gap_ztfi'])
 
-for i in range(200,210):
+for i in range(0, len(bo_ok)):
     df_ = df[df['healpixID'].str.contains(bo_ok[i])]
     df_new = df_.copy()
     pd_ = cl.run(df_new)
