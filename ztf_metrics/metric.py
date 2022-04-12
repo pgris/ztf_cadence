@@ -3,15 +3,15 @@ from optparse import OptionParser
 import numpy as np
 
 class CadenceMetric:
-    def __init__(self, GAP=60):
-        self.GAP = GAP
+    def __init__(self, gap=60):
+        self.gap_ = gap
         
         """
         Class that allows to compute different observables like cadence and season length from a pandas data frame.
         
         Parameters
         --------------
-        GAP: int, opt
+        gap: int, opt
             gap for the season length in days (default : 60)
   
         """
@@ -33,7 +33,7 @@ class CadenceMetric:
         df = df.sort_values('time', ascending=True)
         df = df.reset_index()
         df_time = df['time'].diff()
-        index = list((df_time[df_time>self.GAP].index)-1)
+        index = list((df_time[df_time>self.gap_].index)-1)
         index.insert(0, df.index.min())
         index.insert(len(index), df.index.max())
         df['season'] = 0
@@ -42,7 +42,7 @@ class CadenceMetric:
             df.loc[index[i] : index[i+1], 'season'] = i+1    
         return df
     
-    def run(self, data):
+    def run(self, data, numpix):
         """
         Running method.
         
@@ -50,6 +50,8 @@ class CadenceMetric:
         --------------
         df: pandas df
             data to process with observations.
+        numpix : int
+            numero of the pixel related to the observation.
         
         Returns
         --------------
@@ -58,19 +60,22 @@ class CadenceMetric:
         data = self.season_l(data)
         s = data['season'].unique()
         df = pd.DataFrame(s, columns=['season'])
+        df['healpixID'] = numpix
                
         df_b = data.groupby(['season']).apply(lambda x : self.calc_metric(group=x))
         df = df.merge(df_b, left_on=['season'], right_on=['season'])
         for b in ['ztfg', 'ztfr', 'ztfi']:
             df_b = data.groupby(['season']).apply(lambda x : self.calc_metric(group=x,bands=[b],colnames=
                                ('cad_{}'.format(b),'nb_obs_{}'.format(b), 'gap_{}'.format(b),
-                               'season_lenght_{}'.format(b)), to_calc=['cadence', 'nb_obs', 'gap', 'season_lenght']))
+                               'season_lenght_{}'.format(b), 'skynoise_{}'.format(b)), 
+                               to_calc=['cadence', 'nb_obs', 'gap', 'season_lenght', 'skynoise']))
             df = df.merge(df_b, left_on=['season'], right_on=['season'])
             
         return df
             
     def calc_metric(self, group, bands=['ztfg', 'ztfr', 'ztfi'], colnames=('cad_all', 'nb_obs_all', 
-                             'gap_all', 'season_lenght_all'), to_calc = ['cadence', 'nb_obs', 'gap', 'season_lenght']):
+                             'gap_all', 'season_lenght_all', 'skynoise_all'), 
+                                                to_calc = ['cadence', 'nb_obs', 'gap', 'season_lenght', 'skynoise']):
         
         """
         Method that calculates.
@@ -105,78 +110,70 @@ class CadenceMetric:
                 res[corresp[calc]]=[0]
         else :
             grp.sort_values('time', ascending=True)
-            diff = grp['time'].diff()
-            
-            obj_for_calc = {}
-            obj_for_calc['cadence'] = diff
-            obj_for_calc['nb_obs'] = grp
-            obj_for_calc['gap'] = diff
-            obj_for_calc['season_lenght'] = grp
+            self.grp = grp
             
             for calc in to_calc:
-                res[corresp[calc]]=[eval('self.{}(obj_for_calc[\'{}\'])'.format(calc, calc))]
+                res[corresp[calc]]=[eval('self.{}()'.format(calc))]
         return pd.DataFrame.from_dict(res)
     
-    def cadence(self, diff):
+    def cadence(self):
         """
         Calculation of the candence.
-        
-        Parameters
-        --------------
-        diff: pandas 
-            data corresponding to a difference in time.
+       
         Returns
         --------------
         Value of the candence.
         """
+        diff = self.grp['time'].diff()
         cad = diff.median()
         return cad
     
-    def nb_obs(self, grp):
+    def nb_obs(self):
         """
         Calculates the number of observations.
         
-        Parameters
-        --------------
-        grp: pandas 
-            data corresponding to the data frame group by season and bands.
         Returns
         --------------
         Value of the number of observations.
         """
-        nb = len(grp)
+        nb = len(self.grp)
         return nb
     
-    def gap(self, diff):
+    def gap(self):
         """
         Calculation of the candence.
         
-        Parameters
-        --------------
-        diff: pandas 
-            data corresponding to a difference in time.
         Returns
         --------------
         Value of the season lenght gap.
         """
+        diff = self.grp['time'].diff()
         g = diff.max()
         return g
     
-    def season_lenght(self, grp):
+    def season_lenght(self):
         """
-        Calculates the season lenght
+        Calculates the season lenght.
         
-        Parameters
-        --------------
-        grp: pandas 
-            data corresponding to the data frame group by season and bands.
         Returns
         --------------
         Value of the season lenght.
         """
         
-        sl = grp['time'].max() - grp['time'].min()
+        sl = self.grp['time'].max() - self.grp['time'].min()
         return sl
+    
+    def skynoise(self):
+        """
+        Calculates the skynoise.
+        
+        Returns
+        --------------
+        Value of the skynoise mean.
+        """
+        
+        sk = self.grp['skynoise'].mean()
+        return sk
 
 
 def read(input_dir, fileName):
@@ -199,7 +196,8 @@ def read(input_dir, fileName):
     bo_= bo.split(",")
     if 'None' in bo_:
         bo_.remove('None')
-        bo_ = set(bo_)
+    
+    bo_ = set(bo_)
     bo_ok = list(bo_)
 
     cl = CadenceMetric()   
@@ -208,8 +206,7 @@ def read(input_dir, fileName):
     for b in bo_ok:
         df_ = df[df['healpixID'].str.contains(b)]
         df_new = df_.copy()
-        pd_ = cl.run(df_new)
-        pd_.insert(loc = 0, column = 'healpixID', value = b) 
+        pd_ = cl.run(df_new, b)
 
         df1 = pd.concat([df1, pd_])
     return df1
