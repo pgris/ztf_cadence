@@ -11,7 +11,7 @@ class CadenceMetric:
         
         Parameters
         --------------
-        GAP: int, opt
+        gap: int, opt
             gap for the season length in days (default : 60)
   
         """
