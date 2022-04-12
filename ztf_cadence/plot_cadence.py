@@ -85,9 +85,14 @@ class PlotOS:
                 k = 0.3
             cb2.ax.text(k+j, 0.80, lab)  # ha='center', va='center')
 
+         # add copyright
+        ax.text(ax.get_position().x0+0.75,
+                ax.get_position().y0+0.01, '\xa9 M.Bailleul, Ph.Gris', )
+
         # hide axis
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
+
         plt.axis('off')
 
         if save:
