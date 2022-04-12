@@ -204,7 +204,7 @@ def read(input_dir, fileName):
     cl = CadenceMetric()   
 
     df1 = pd.DataFrame()
-    for b in bo_ok[:10]:
+    for b in bo_ok:
         df_ = df[df['healpixID'].str.contains(b)]
         df_new = df_.copy()
         pd_ = cl.run(df_new, b)
