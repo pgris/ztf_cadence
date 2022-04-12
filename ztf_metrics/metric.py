@@ -61,7 +61,6 @@ class CadenceMetric:
         s = data['season'].unique()
         df = pd.DataFrame(s, columns=['season'])
         df['healpixID'] = numpix
-        print('DF=', df)
                
         df_b = data.groupby(['season']).apply(lambda x : self.calc_metric(group=x))
         df = df.merge(df_b, left_on=['season'], right_on=['season'])
