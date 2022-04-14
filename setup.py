@@ -14,7 +14,7 @@ setup(
     author='Ph.Gris',
     author_email='philippe.gris@clermont.in2p3.fr',
     license='BSD',
-    packages=['ztf_cadence', 'ztf_cadence_input'],
+    packages=['ztf_cadence', 'ztf_cadence_input','ztf_metrics'],
     package_data={'ztf_cadence_input': ['*.txt']},
     python_requires='>=3.5',
     zip_safe=False,
