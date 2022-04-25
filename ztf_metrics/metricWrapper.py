@@ -3,7 +3,7 @@ from ztf_metrics.metrics import CadenceMetric
 import pandas as pd
 
 
-def processMetric_multiproc(metricName, df, nproc):
+def processMetric_multiproc(metricName, df, nproc, nside, coadd_night):
     """
     Method to process metrics
 
@@ -15,6 +15,10 @@ def processMetric_multiproc(metricName, df, nproc):
       data to process
     nproc: int
       number of procs for multiprocessing
+    nside: int
+      nside healpix parameter
+    coadd_night: int
+      to perform coaddition of data per night and per band
 
     Returns
     --------------
@@ -29,6 +33,8 @@ def processMetric_multiproc(metricName, df, nproc):
     params = {}
     params['metricName'] = metricName
     params['data'] = df
+    params['nside'] = nside
+    params['coadd_night'] = coadd_night
 
     resdf = multiproc(healpixIDs, params, processMetric, nproc)
 
@@ -53,18 +59,22 @@ def processMetric(healpixIDs, params={}, j=0, output_q=None):
 
     metricName = params['metricName']
     data = params['data']
+    nside = params['nside']
+    coadd_night = params['coadd_night']
 
     healpixIDs = set(healpixIDs)
 
-    cl = eval('{}()'.format(metricName))
+    cl = eval('{}(nside={},coadd_night={})'.format(
+        metricName, nside, coadd_night))
 
     resdf = pd.DataFrame()
     for hpix in healpixIDs:
         dfb = data[data['healpixID'].str.contains(hpix)]
         df_new = dfb.copy()
-        respix = cl.run(hpix, df_new)
+        respix = cl.run(int(hpix), df_new)
 
         resdf = pd.concat([resdf, respix])
+
     if output_q is not None:
         return output_q.put({j: resdf})
     else:
