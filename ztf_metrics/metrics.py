@@ -1,82 +1,85 @@
 import pandas as pd
+import healpy as hp
+from ztf_metrics.metricUtils import dustMap, seasons, addNight, coaddNight
 
 
 class CadenceMetric:
-    def __init__(self, gap=60):
-        self.gap_ = gap
-
+    def __init__(self, gap=60, nside=128, coadd_night=1):
         """
         Class that allows to compute different observables like cadence and season length from a pandas data frame.
 
         Parameters
         --------------
         gap: int, opt
-            gap between two seasons (default : 60)
+            gap between two seasons (default : 60 days)
+        nside: int,opt
+          healpix nside parameter (default: 128)
+        coadd_night: int, opt
+          to perform coaddition per band and per night
 
         """
+        self.gapvalue = gap
+        self.nside = nside
+        self.coadd_night = coadd_night
+        self.dustmap = dustMap(nside)
 
-    def season_l(self, df):
-        """
-        Method that determines the different seasons of an observation related to a pixel.
-
-        Parameters
-        --------------
-        df: pandas df
-            data to process with observations.
-
-        Returns
-        --------------
-        Starting pandas with a 'season' column.
-        """
-
-        df = df.sort_values('time', ascending=True)
-        df = df.reset_index()
-        df_time = df['time'].diff()
-        index = list((df_time[df_time > self.gap_].index)-1)
-        index.insert(0, df.index.min())
-        index.insert(len(index), df.index.max())
-        df['season'] = 0
-
-        for i in range(0, len(index)-1):
-            df.loc[index[i]: index[i+1], 'season'] = i+1
-        return df
-
-    def run(self, numpix, data):
+    def run(self, pixnum, data):
         """
         Running method.
 
         Parameters
         --------------
-        numpix : int
+        pixnum : int
             pixel ID related to the observation.
          df: pandas df
             data to process with observations.
-
 
         Returns
         --------------
         A new data frame with the desired parameters. It has as many lines as the observation season for the selected pixel.
         """
 
-        data = self.season_l(data)
+        # modify healpixID
+        data['healpixID'] = pixnum
+        # define nights
+        data = addNight(data)
+        # coadd here
+        if self.coadd_night:
+            data = coaddNight(data, cols=['night', 'band', 'healpixID'])
+
+        # get E(B-V)
+        idx = self.dustmap['healpixID'] == pixnum
+        seldust = self.dustmap[idx]
+
+        # get seasons
+        data = seasons(data, self.gapvalue, mjdCol='time')
         s = data['season'].unique()
         df = pd.DataFrame(s, columns=['season'])
-        df['healpixID'] = numpix
+        df['season'] = df['season'].astype(int)
+        df['healpixID'] = pixnum
+        df['ebvofMW'] = seldust['ebvofMW'].to_list()[0]
+        df['healpixRA'] = seldust['RA'].to_list()[0]
+        df['healpixDec'] = seldust['Dec'].to_list()[0]
 
-        df_b = data.groupby(['season']).apply(
-            lambda x: self.calc_metric(group=x))
+        # need to coadd by night here
+        data_coadded = coaddNight(data.drop(columns=['band']), cols=[
+                                  'night', 'healpixID'])
+        data_coadded['band'] = 'ztfall'
+        df_b = data_coadded.groupby(['season']).apply(
+            lambda x: self.calc_metric(group=x, bands=['ztfall'])).reset_index()
         df = df.merge(df_b, left_on=['season'], right_on=['season'])
         for b in ['ztfg', 'ztfr', 'ztfi']:
             df_b = data.groupby(['season']).apply(lambda x: self.calc_metric(group=x, bands=[b], colnames=('cad_{}'.format(b), 'nb_obs_{}'.format(b), 'gap_{}'.format(b),
-                                                                                                           'season_lenght_{}'.format(b), 'skynoise_{}'.format(b)),
-                                                                             to_calc=['cadence', 'nb_obs', 'gap', 'season_lenght', 'skynoise']))
+                                                                                                           'season_length_{}'.format(b), 'skynoise_{}'.format(b)),
+                                                                             to_calc=['cadence', 'nb_obs', 'gap', 'season_length', 'skynoise']))
             df = df.merge(df_b, left_on=['season'], right_on=['season'])
 
         return df
 
-    def calc_metric(self, group, bands=['ztfg', 'ztfr', 'ztfi'], colnames=('cad_all', 'nb_obs_all',
-                                                                           'gap_all', 'season_lenght_all', 'skynoise_all'),
-                    to_calc=['cadence', 'nb_obs', 'gap', 'season_lenght', 'skynoise']):
+    def calc_metric(self, group, bands=['ztfg', 'ztfr', 'ztfi'],
+                    colnames=('cad_all', 'nb_obs_all',
+                              'gap_all', 'season_length_all', 'skynoise_all'),
+                    to_calc=['cadence', 'nb_obs', 'gap', 'season_length', 'skynoise']):
         """
         Method that calculates.
 
@@ -88,11 +91,11 @@ class CadenceMetric:
             list of the different bands in your data frame (default : ['ztfg', 'ztfr', 'ztfi'])
         colnames: list, opt
             list of the different colnames for your futur data frame (default : ('cad_all', 'nb_obs_all',
-                             'gap_all', 'season_lenght_all'))
+                             'gap_all', 'season_length_all'))
         to_calc: list, opt
-            list of the different parameters you want to calculate (default : ['cadence', 'nb_obs', 'gap', 'season_lenght']).
-            the parameters you can put in this list : 'cadence', 'nb_obs', 'gap', 'season_lenght', 'skynoise'.
-            the lenght of to_talc have to match with the lenght of colnames.
+            list of the different parameters you want to calculate (default : ['cadence', 'nb_obs', 'gap', 'season_length']).
+            the parameters you can put in this list : 'cadence', 'nb_obs', 'gap', 'season_length', 'skynoise'.
+            the length of to_talc have to match with the length of colnames.
 
         Returns
         --------------
@@ -114,6 +117,7 @@ class CadenceMetric:
 
             for calc in to_calc:
                 res[corresp[calc]] = [eval('self.{}()'.format(calc))]
+
         return pd.DataFrame.from_dict(res)
 
     def cadence(self):
@@ -145,19 +149,19 @@ class CadenceMetric:
 
         Returns
         --------------
-        Value of the season lenght gap.
+        Value of the season length gap.
         """
         diff = self.grp['time'].diff()
         g = diff.max()
         return g
 
-    def season_lenght(self):
+    def season_length(self):
         """
-        Calculates the season lenght.
+        Calculates the season length.
 
         Returns
         --------------
-        Value of the season lenght.
+        Value of the season length.
         """
 
         sl = self.grp['time'].max() - self.grp['time'].min()
