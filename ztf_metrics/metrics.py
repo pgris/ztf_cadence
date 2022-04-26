@@ -60,10 +60,16 @@ class CadenceMetric:
         df['ebvofMW'] = seldust['ebvofMW'].to_list()[0]
         df['healpixRA'] = seldust['RA'].to_list()[0]
         df['healpixDec'] = seldust['Dec'].to_list()[0]
+        dfm = data.groupby(['season']).apply(
+            lambda x: pd.DataFrame({'time_min': [x['time'].min()], 'time_max': [x['time'].max()]})).reset_index()
+        df = df.merge(dfm, left_on=['season'], right_on=['season'])
+        # df['time_max'] = data.groupby(['season'])['time'].max()
 
+        print(data.groupby(
+            ['season']).apply(lambda x: x['time'].min()))
         # need to coadd by night here
         data_coadded = coaddNight(data.drop(columns=['band']), cols=[
-                                  'night', 'healpixID'])
+            'night', 'healpixID'])
         data_coadded['band'] = 'ztfall'
         df_b = data_coadded.groupby(['season']).apply(
             lambda x: self.calc_metric(group=x, bands=['ztfall'])).reset_index()
