@@ -27,8 +27,7 @@ def processMetric_multiproc(metricName, df, nproc, nside, coadd_night):
 
     healpixIDs = ','.join(df['healpixID'].to_list())
     healpixIDs = healpixIDs.split(",")
-    if 'None' in healpixIDs:
-        healpixIDs.remove('None')
+    healpixIDs = list(filter(lambda a: a != 'None', healpixIDs))
 
     params = {}
     params['metricName'] = metricName
