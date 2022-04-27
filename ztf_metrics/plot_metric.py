@@ -10,14 +10,12 @@ import seaborn as sns
 class PlotOS:
     """
     class to plot OS pointings vs time
-
     Parameters
     --------------
     nside: int, opt
       nside for healpix (default: 128)
     outDir: str,opt
       output directory (default: plot_cadence)
-
     """
 
     def __init__(self, nside=128, outDir='plot_cadence'):
@@ -33,7 +31,6 @@ class PlotOS:
              cbar=True):
         """
         Method to display OS (Mollview)
-
         Parameters
         --------------
         tab: array
@@ -46,7 +43,6 @@ class PlotOS:
           title for the plot (default: )
         inum: int, opt
           tag for outputfile (default: -1)
-
         """
 
         self.cbar = cbar
@@ -60,12 +56,18 @@ class PlotOS:
         hpxmap += -1
         healpixIDs = np.unique(self.sel[healpixId])
         hpxmap[self.sel['healpixID'].astype(int)] = self.sel[vardisp]
+        
+        mk_sup = self.sel[vardisp]<max_tab
+        mk_inf = self.sel[vardisp]>min_tab
+        mk_born = mk_sup & mk_inf
+        
+        tab_masked = self.sel[mk_born]
 
-        title += ' / median = {} \n moy = {}'.format(round(self.sel[vardisp].median(), 3), round(self.sel[vardisp].mean(), 3))
+        title += ' / median = {} \n moy = {}'.format(round(tab_masked[vardisp].median(), 1), round(tab_masked[vardisp].mean(), 1))
         
         ik = hpxmap > 1.
         area = self.pixArea*len(hpxmap[ik])
         
         hp.mollview(hpxmap, min=self.min_, max=self.max_, cmap=self.cmap,
                     title=title, nest=True, norm=norm, cbar=self.cbar, hold=True)
-        hp.graticule(dpar=10., dmer=30.)   
+        hp.graticule(dpar=10., dmer=30.)
