@@ -3,7 +3,7 @@ from ztf_metrics.metrics import CadenceMetric
 import pandas as pd
 
 
-def processMetric_multiproc(metricName, df, nproc, nside, coadd_night):
+def processMetric_multiproc(metricName, df, nproc, nside, coadd_night, npixels=-1, pixelList='all'):
     """
     Method to process metrics
 
@@ -19,16 +19,36 @@ def processMetric_multiproc(metricName, df, nproc, nside, coadd_night):
       nside healpix parameter
     coadd_night: int
       to perform coaddition of data per night and per band
+    npixels: int,opt
+      number of pixels to process (randomly chosen; default: -1: all)
+    pixelList: str, opt
+      list of pixels to process (default: all)
 
     Returns
     --------------
     New data frame for the differents pixels with the calculation (value) of differents metrics.
     """
 
-    healpixIDs = ','.join(df['healpixID'].to_list())
-    healpixIDs = set(healpixIDs.split(","))
-    healpixIDs = list(filter(lambda a: a != 'None', healpixIDs))
+    if pixelList != 'all':
+        # set of pixels
+        healpixIDs = pixelList.split(',')
+    else:
+        # all the pixels
+        healpixIDs = ','.join(df['healpixID'].to_list())
+        healpixIDs = set(healpixIDs.split(","))
+        healpixIDs = list(filter(lambda a: a != 'None', healpixIDs))
 
+    # random pixels
+    if npixels >= 1:
+        import random
+        healpixIDs = random.choice(healpixIDs, k=npixels)
+
+    # adjust nproc (if necessary)
+    import numpy as np
+    if nproc > np.min([nproc, len(healpixIDs)]):
+        nproc = len(healpixIDs)
+
+    print('finally', nproc, healpixIDs)
     params = {}
     params['metricName'] = metricName
     params['data'] = df
