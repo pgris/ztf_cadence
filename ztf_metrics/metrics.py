@@ -1,6 +1,9 @@
 import pandas as pd
 import healpy as hp
+import numpy as np
 from ztf_metrics.metricUtils import dustMap, seasons, addNight, coaddNight
+from ztf_pipeutils.ztf_pipeutils.ztf_hdf5 import Read_LightCurve
+from ztf_simfit.ztf_simfit_plot.z_bins import Z_bins
 
 
 class CadenceMetric:
@@ -23,7 +26,7 @@ class CadenceMetric:
         self.coadd_night = coadd_night
         self.dustmap = dustMap(nside)
 
-    def run(self, pixnum, data):
+    def run(self, pixnum, data, input_dir_data):
         """
         Running method.
 
@@ -178,3 +181,110 @@ class CadenceMetric:
 
         sk = self.grp['skynoise'].mean()
         return sk
+
+    
+class RedshiftCompMetric:
+    def __init__(self, gap=60, nside=128, coadd_night=1):
+        
+        self.gapvalue = gap
+        self.nside = nside
+        self.coadd_night = coadd_night
+        self.dustmap = dustMap(nside)
+
+    def run(self, pixnum, data, input_dir_data):
+        
+        self.input_dir_data = input_dir_data
+        self.pixnum = pixnum
+        
+        mk_sup = data['c_err']>0.036
+        mk_inf = data['c_err']<0.044
+        mask_c_err = mk_sup & mk_inf
+        
+        # get E(B-V)
+        idx = self.dustmap['healpixID'] == pixnum   
+        seldust = self.dustmap[idx]
+        
+        # get seasons
+        s = pd.unique(data['season'])
+        df = pd.DataFrame(s, columns=['season'])
+        df['season'] = df['season'].astype(int)
+        df['healpixID'] = pixnum
+        
+        data = data[mask_c_err]
+        
+        dataFileName = data.meta['file_name']
+        lc = self.get_lc(dataFileName, data)
+        df_new = pd.DataFrame()
+        
+        for b in pd.unique(lc['band']):
+            df_b = self.get_df(lc, data.meta['directory'], data.meta['file_name_meta'], b)
+            df_b['healpixID'] = pixnum
+            
+            df_c = df.merge(df_b, on ='healpixID')
+            
+            df_new = pd.concat([df_new, df_c], ignore_index=True)
+       
+        return df_new
+            
+        
+    def get_df(self, lc, dir_, file_name_, b):
+        
+        dico={'variables': {'sel': 'sel','c_err': 'c_err','zmin': 'z','zmax': 'z','chi2': 'chi2'},
+              'operators': {'op sel': 'operator.eq','op c_err': 'operator.ne','op zmin': 'operator.ge',
+                            'op zmax': 'operator.lt','op_chi2': 'operator.lt'},
+              'limites': {'lim sel': 1,'lim c_err': -1,'lim zmin': 0.01,'lim zmax': 0.1,'lim_chi2': 2}}
+        
+        mag_min = self.calc_mag(lc, b)
+        z_comp, z_comp_sup, z_comp_inf = self.get_z(dir_, file_name_, dico)
+        
+        return pd.DataFrame({'z_comp' : z_comp, 'z_comp_sup' : z_comp_sup, 'z_comp_inf' : z_comp_inf,
+                            'mag_min' : mag_min, 'band' : b})
+            
+
+    def get_lc(self, dataFileName, data):
+        cl2 = Read_LightCurve(file_name=dataFileName, inputDir=self.input_dir_data)
+        for path in data['path']:
+            lc = cl2.get_table(path=path)
+            lc = self.complete_lc(lc, 5)
+            
+            return lc
+    
+    def complete_lc(self, lc, snr):
+
+        lc['SNR'] = lc['flux'] / lc['fluxerr']
+        lc['phase'] = (lc['time'] - lc.meta['t0']) / (1-lc.meta['z'])
+        idx = lc['SNR'] >= snr
+
+        return lc[idx]   
+        
+    def calc_mag(self, lc, band):
+        
+        mask_b = lc['band'] == band
+        lc = lc[mask_b]
+        flux_max = np.max(lc['flux'])
+        mag_min = -2.5*np.log10(flux_max) + lc[lc['flux']==flux_max]['zp']
+
+        return mag_min   
+    
+    def get_z(self, diretory, filename, dic):
+        
+        z_comp, z_comp_sup, z_comp_inf = Z_bins(metaFitInput = filename, 
+                                                inputDir = diretory, dico = dic).plot_interpolation1d(add_column=True)
+        
+        return z_comp, z_comp_sup, z_comp_inf
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
