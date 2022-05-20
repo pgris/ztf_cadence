@@ -1,6 +1,8 @@
 import pandas as pd
 import healpy as hp
 from ztf_metrics.metricUtils import dustMap, seasons, addNight, coaddNight
+from ztf_pipeutils.ztf_pipeutils.ztf_hdf5 import Read_LightCurve
+from ztf_simfit.ztf_simfit_plot.z_bins import Z_bins
 
 
 class CadenceMetric:
@@ -184,3 +186,118 @@ class CadenceMetric:
 
         sk = self.grp['skynoise'].mean()
         return sk
+
+    
+import astropy.units as u
+import numpy as np
+
+class RedMagMetric:
+    def __init__(self, gap=60, nside=128, coadd_night=1, 
+                 meta_dir='/Users/manon/ztf_pixelized/meta_pix', plot=False):
+        
+        self.gapvalue = gap
+        self.nside = nside
+        self.coadd_night = coadd_night
+        self.dustmap = dustMap(nside)
+        self.meta_dir = meta_dir
+        self.plot = plot
+        
+    def run(self, pixnum, data):
+        
+        self.pixnum = pixnum
+        
+        mk_sup = data['c_err']>0.036
+        mk_inf = data['c_err']<0.044
+        mask_c_err = mk_sup & mk_inf
+        
+        # get E(B-V)
+        idx = self.dustmap['healpixID'] == pixnum   
+        seldust = self.dustmap[idx]
+        
+        # get seasons
+        s = pd.unique(data['season'])
+        df = pd.DataFrame(s, columns=['season'])
+        df['season'] = df['season'].astype(int)
+        df['healpixID'] = pixnum
+        
+        data = data[mask_c_err]
+        df_new = pd.DataFrame()
+        
+        dataFileName = 'Meta_fit_{}_{}.hdf5'.format(pixnum, s[0])
+
+        m, delta_m = self.get_mag(data['z'])
+        mag = np.mean(m)
+        delta_mag = np.mean(delta_m)
+        
+        df_ = self.get_df(dataFileName)
+        df_['healpixID'] = pixnum
+        df_['mag_lim'] = mag
+        df_['mag_lim_max'] = mag + delta_mag
+        df_['mag_lim_min'] = mag - delta_mag
+        
+        df_new = df.merge(df_, on='healpixID')
+        
+        return df_new
+    
+    def get_dl(self, z):
+        
+        from astropy.cosmology import FlatLambdaCDM
+               
+        cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
+        dl_Mpc = cosmo.luminosity_distance([z]) 
+        dl_pc = dl_Mpc.to(u.pc)
+        
+        h = cosmo.h
+        delta_dl_Mpc = (cosmo.luminosity_distance([z]+h) - cosmo.luminosity_distance([z]-h))/2*h
+        delta_dl_pc = delta_dl_Mpc.to(u.pc)
+        
+        return dl_pc, delta_dl_pc 
+    
+    def get_mag(self, z):
+        
+        dl_pc, delta_dl_pc = self.get_dl(z)
+        
+        m = -2.5*np.log10(dl_pc.to_value()**2/10**2) + 19.6
+        delta_m = delta_dl_pc / dl_pc
+            
+        return m, delta_m
+    
+    def get_df(self, file_name_):
+        
+        z_comp, z_comp_sup, z_comp_inf = self.get_z(self.meta_dir, file_name_)
+        
+        d = {'z_comp' : [z_comp], 'z_comp_max' : [z_comp_sup], 'z_comp_min' : [z_comp_inf]}
+        return pd.DataFrame(d)
+        
+    def get_z(self, diretory, filename):
+        
+        z_comp, z_comp_sup, z_comp_inf = Z_bins(metaFitInput = filename, 
+                                                inputDir = diretory).get_z()
+        if self.plot:
+            Z_bins(metaFitInput = filename, inputDir = diretory).plot_z_comp()
+            
+        return z_comp, z_comp_sup, z_comp_inf
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
