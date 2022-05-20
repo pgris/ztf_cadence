@@ -268,23 +268,6 @@ class RedMagMetric:
         
         d = {'z_comp' : [z_comp], 'z_comp_max' : [z_comp_sup], 'z_comp_min' : [z_comp_inf]}
         return pd.DataFrame(d)
-    
-    def get_lc(self, path):
-        
-        cl2 = Read_LightCurve(file_name=self.lc_name, inputDir=self.lc_dir)
-        lc = cl2.get_table(path=path)
-        lc = self.complete_lc(lc, 5)         
-        
-        return lc    
-    
-    def complete_lc(self, lc, snr):
-
-        lc['SNR'] = lc['flux'] / lc['fluxerr']
-        lc['phase'] = (lc['time'] - lc.meta['t0']) / (1-lc.meta['z'])
-        idx = lc['SNR'] >= snr
-
-        return lc[idx]   
-    
         
     def get_z(self, diretory, filename):
         
