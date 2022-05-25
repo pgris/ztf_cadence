@@ -5,6 +5,7 @@ import healpy as hp
 from ztf_metrics.metricUtils import dustMap, seasons, addNight, coaddNight
 from ztf_pipeutils.ztf_hdf5 import Read_LightCurve
 from ztf_simfit_plot.z_bins import Z_bins
+from scipy import interpolate
 
 
 class CadenceMetric:
@@ -191,19 +192,21 @@ class CadenceMetric:
 
 
 class RedMagMetric:
-    def __init__(self, gap=60, nside=128, coadd_night=1,
-                 meta_dir='/Users/manon/ztf_pixelized/meta_pix', plot=False):
+    def __init__(self, gap=60, nside=128, coadd_night=1, plot=False):
 
         self.gapvalue = gap
         self.nside = nside
         self.coadd_night = coadd_night
         self.dustmap = dustMap(nside)
-        self.meta_dir = meta_dir
         self.plot = plot
 
     def run(self, pixnum, data):
 
         self.pixnum = pixnum
+
+        print('there man', pixnum, data['healpixID'].unique())
+        self.zlim(data)
+        print(test)
 
         mk_sup = data['c_err'] > 0.036
         mk_inf = data['c_err'] < 0.044
@@ -237,6 +240,37 @@ class RedMagMetric:
         df_new = df.merge(df_, on='healpixID')
 
         return df_new
+
+    def zlim(self, data):
+
+        idx = data['fitstatus'] == 'fitok'
+        seldata = data[idx]
+
+        zmin, zmax = seldata['z'].min(), seldata['z'].max()
+        print('hello', zmin, zmax)
+        bins = np.arange(zmin, zmax, 0.01)
+        group = seldata.groupby(pd.cut(seldata['z'], bins))
+        bin_centers = (bins[: -1] + bins[1:])/2
+        bin_values = group.apply(
+            lambda x: pd.DataFrame({'c_err': [x['c_err'].mean()], 'c_err_std': [x['c_err'].std()]}))
+
+        bin_values['c_err_p'] = bin_values['c_err']+bin_values['c_err_std']
+        bin_values['c_err_m'] = bin_values['c_err']-bin_values['c_err_std']
+        print(self.zlim_interp(bin_values['c_err'], bin_centers))
+        print(self.zlim_interp(bin_values['c_err_p'], bin_centers))
+        print(self.zlim_interp(bin_values['c_err_m'], bin_centers))
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+        ax.errorbar(
+            bin_centers, bin_values['c_err'], yerr=bin_values['c_err_std'])
+        plt.show()
+
+    def zlim_interp(self, x, y, sigmaC=0.04):
+
+        interp = interpolate.interp1d(x, y, bounds_error=False, fill_value=-1.)
+
+        return interp(sigmaC)
 
     def get_dl(self, z):
 
