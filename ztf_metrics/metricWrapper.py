@@ -1,5 +1,5 @@
 from ztf_pipeutils.ztf_util import multiproc
-from ztf_metrics.metrics import CadenceMetric
+from ztf_metrics.metrics import CadenceMetric, RedMagMetric
 import pandas as pd
 
 
