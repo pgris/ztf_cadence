@@ -87,12 +87,19 @@ def processMetric(healpixIDs, params={}, j=0, output_q=None):
         metricName, nside, coadd_night))
 
     resdf = pd.DataFrame()
+    fracs = range(10, 100, 50)
+    prfr = dict(zip(fracs, [1]*len(fracs)))
+    print('number of pixels to process', len(healpixIDs))
     for hpix in healpixIDs:
         dfb = data[data['healpixID'].str.contains(hpix)]
         df_new = dfb.copy()
-        respix = cl.run(int(hpix), df_new)
-
+        respix = cl.run(int(hpix), df_new, plot=False)
         resdf = pd.concat([resdf, respix])
+        frac_processed = 100.*len(resdf)/len(healpixIDs)
+        for key, vv in prfr.items():
+            if frac_processed >= key and vv:
+                print('fraction processed', frac_processed)
+                prfr[key] = 0
 
     if output_q is not None:
         return output_q.put({j: resdf})
