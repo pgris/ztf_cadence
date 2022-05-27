@@ -240,28 +240,28 @@ class RedMagMetric:
         data = data[idx]
 
         seasons = data['season'].unique()
+        ebvofMW = np.mean(data['mwebv'])
 
         resdf = pd.DataFrame()
         for seas in seasons:
             idb = data['season'] == seas
             data_season = data[idb]
-            ddf = self.process_season(pixnum, data_season, seas, plot=plot)
+            ddf = self.process_season(data_season, plot=plot)
+            ddf['healpixID'] = pixnum
+            ddf['season'] = seas
+            ddf['ebvofMW'] = ebvofMW
             resdf = pd.concat((resdf, ddf))
 
         return resdf
 
-    def process_season(self, pixnum, data_season, season, plot=False):
+    def process_season(self, data_season, plot=False):
         """
         method to estimate metrics per pixel and season
 
         Parameters
         --------------
-        pixnum: int
-           pixel number
         data_season: pandas df
            data for the season
-        season: int
-           season number
         plot: bool, opt
           to plot sigmaC vs z (zlim estimation) (default: False)
 
@@ -270,16 +270,12 @@ class RedMagMetric:
         pandas df with the following columns
         zlim, zlim_m,zlim_p,zlim_b
         mag, mag_m, mag_p
-        healpixID
-        season
 
         """
 
         zlims = self.zlim(data_season, plot=plot)
         mag = self.get_mag(zlims)
         zlims.update(mag)
-        zlims['healpixID'] = np.array(pixnum)
-        zlims['season'] = season
 
         zzlim = {}
         for key, vals in zlims.items():
