@@ -192,124 +192,218 @@ class CadenceMetric:
 
 
 class RedMagMetric:
-    def __init__(self, gap=60, nside=128, coadd_night=1, plot=False):
+    def __init__(self, gap=60, nside=128, coadd_night=1):
+        """
+        class to estimate the redshift and magnitude limits
+
+        Parameters
+        --------------
+
+        """
 
         self.gapvalue = gap
         self.nside = nside
         self.coadd_night = coadd_night
         self.dustmap = dustMap(nside)
-        self.plot = plot
+        self.sigmaC = 0.04
+        self.absPeakMag = -19.6
 
-    def run(self, pixnum, data):
+        # cosmology
+        from astropy.cosmology import FlatLambdaCDM
 
+        self.cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc,
+                                   Tcmb0=2.725 * u.K, Om0=0.3)
+
+    def run(self, pixnum, data, plot=False):
+        """
+        Main metric method
+
+        Parameters
+        ---------------
+        pixnum: int
+           pixel number
+        data: pandas df
+           data to process
+        plot: bool, opt
+          to plot sigmaC vs z (zlim estimation) (default: False)
+
+        Returns
+        ----------
+        pandas df with the following columns
+        zlim, zlim_m,zlim_p,zlim_b
+        mag, mag_m, mag_p
+        healpixID
+        season
+        """
         self.pixnum = pixnum
+        idx = data['healpixID'] == str(pixnum)
+        data = data[idx]
 
-        print('there man', pixnum, data['healpixID'].unique())
-        self.zlim(data)
-        print(test)
+        seasons = data['season'].unique()
 
-        mk_sup = data['c_err'] > 0.036
-        mk_inf = data['c_err'] < 0.044
-        mask_c_err = mk_sup & mk_inf
+        resdf = pd.DataFrame()
+        for seas in seasons:
+            idb = data['season'] == seas
+            data_season = data[idb]
+            ddf = self.process_season(pixnum, data_season, seas, plot=plot)
+            resdf = pd.concat((resdf, ddf))
 
-        # get E(B-V)
-        idx = self.dustmap['healpixID'] == pixnum
-        seldust = self.dustmap[idx]
+        return resdf
 
-        # get seasons
-        s = pd.unique(data['season'])
-        df = pd.DataFrame(s, columns=['season'])
-        df['season'] = df['season'].astype(int)
-        df['healpixID'] = pixnum
+    def process_season(self, pixnum, data_season, season, plot=False):
+        """
+        method to estimate metrics per pixel and season
 
-        data = data[mask_c_err]
-        df_new = pd.DataFrame()
+        Parameters
+        --------------
+        pixnum: int
+           pixel number
+        data_season: pandas df
+           data for the season
+        season: int
+           season number
+        plot: bool, opt
+          to plot sigmaC vs z (zlim estimation) (default: False)
 
-        dataFileName = 'Meta_fit_{}_{}.hdf5'.format(pixnum, s[0])
+        Returns
+        ----------
+        pandas df with the following columns
+        zlim, zlim_m,zlim_p,zlim_b
+        mag, mag_m, mag_p
+        healpixID
+        season
 
-        m, delta_m = self.get_mag(data['z'])
-        mag = np.mean(m)
-        delta_mag = np.mean(delta_m)
+        """
 
-        df_ = self.get_df(dataFileName)
-        df_['healpixID'] = pixnum
-        df_['mag_lim'] = mag
-        df_['mag_lim_max'] = mag + delta_mag
-        df_['mag_lim_min'] = mag - delta_mag
+        zlims = self.zlim(data_season, plot=plot)
+        mag = self.get_mag(zlims)
+        zlims.update(mag)
+        zlims['healpixID'] = np.array(pixnum)
+        zlims['season'] = season
 
-        df_new = df.merge(df_, on='healpixID')
+        zzlim = {}
+        for key, vals in zlims.items():
+            zzlim[key] = [vals.item()]
 
-        return df_new
+        return pd.DataFrame.from_dict(zzlim)
 
-    def zlim(self, data):
+    def zlim(self, data, plot=False):
+        """
+        Method to estimate redshift limit values
 
+        Parameters
+        --------------
+        data: pandas df
+           data to process
+        plot: bool, opt
+          to plot sigmaC vs z (default: False)
+
+        Returns
+        ----------
+        dict with the following keys: zlim, zlim_p, zlim_m, zlim_b
+
+        """
         idx = data['fitstatus'] == 'fitok'
         seldata = data[idx]
 
+        if len(seldata) < 5:
+            return dict(zip(['zlim', 'zlim_p', 'zlim_m', 'zlim_b'], [np.asarray(-1.0)]*4))
+
         zmin, zmax = seldata['z'].min(), seldata['z'].max()
-        print('hello', zmin, zmax)
         bins = np.arange(zmin, zmax, 0.01)
         group = seldata.groupby(pd.cut(seldata['z'], bins))
         bin_centers = (bins[: -1] + bins[1:])/2
         bin_values = group.apply(
             lambda x: pd.DataFrame({'c_err': [x['c_err'].mean()], 'c_err_std': [x['c_err'].std()]}))
 
+        if len(bin_values) < 2:
+            return dict(zip(['zlim', 'zlim_p', 'zlim_m', 'zlim_b'], [np.asarray(-1.0)]*4))
+
         bin_values['c_err_p'] = bin_values['c_err']+bin_values['c_err_std']
         bin_values['c_err_m'] = bin_values['c_err']-bin_values['c_err_std']
-        print(self.zlim_interp(bin_values['c_err'], bin_centers))
-        print(self.zlim_interp(bin_values['c_err_p'], bin_centers))
-        print(self.zlim_interp(bin_values['c_err_m'], bin_centers))
-        import matplotlib.pyplot as plt
+        bin_values['z'] = bin_centers
 
+        zlim = {}
+        for tt in ['', '_p', '_m']:
+            zlim['zlim{}'.format(tt)] = self.zlim_interp(
+                bin_values['c_err{}'.format(tt)], bin_centers)
+
+        zlim['zlim_b'] = np.array(0)
+        idx = bin_values['c_err'] >= self.sigmaC
+        if len(bin_values[idx]) == 0:
+            zlim['zlim_b'] = np.array(1)
+
+        if plot:
+            self.plot_sigmaC_z(bin_values, zlim)
+
+        return zlim
+
+    def plot_sigmaC_z(self, bin_values, zlim):
+        """
+        Method to plot sigmaC vs z
+        Parameters
+        --------------
+        bin_values: pandas df
+          data to plot
+        zlim: dict
+          zlim values to draw on the plot
+
+        """
+        import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        ax.errorbar(
-            bin_centers, bin_values['c_err'], yerr=bin_values['c_err_std'])
+        # ax.errorbar(
+        #    bin_values['z'], bin_values['c_err'], yerr=bin_values['c_err_std'])
+        ax.plot(bin_values['z'], bin_values['c_err'], color='r')
+        zmin = bin_values['z'].min()
+        zmax = bin_values['z'].max()
+        ax.plot([zmin, zmax], [self.sigmaC]*2, ls='dotted', color='k')
+        ax.fill_between(bin_values['z'], bin_values['c_err_p'],
+                        bin_values['c_err_m'], color='yellow')
         plt.show()
 
-    def zlim_interp(self, x, y, sigmaC=0.04):
+    def zlim_interp(self, x, y):
+        """
+        Method to interpolate data
 
+        Parameters
+        ---------------
+        x: array
+          x-axis values
+        y: array
+          y-axis values
+
+        Returns
+        ----------
+        y-axis value corresponding to self.sigmaC
+
+        """
         interp = interpolate.interp1d(x, y, bounds_error=False, fill_value=-1.)
 
-        return interp(sigmaC)
+        return interp(self.sigmaC)
 
-    def get_dl(self, z):
+    def get_mag(self, zlim):
+        """
+        Method to estimate apparent magnitudes
 
-        from astropy.cosmology import FlatLambdaCDM
+        Parameters
+        ---------------
+        zlim: dict
+          dict of redshift limits
 
-        cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc,
-                              Tcmb0=2.725 * u.K, Om0=0.3)
-        dl_Mpc = cosmo.luminosity_distance([z])
-        dl_pc = dl_Mpc.to(u.pc)
+        Returns
+        ----------
+        dict with the folling keys: mag, mag_p,mag_m
 
-        h = cosmo.h
-        delta_dl_Mpc = (cosmo.luminosity_distance(
-            [z]+h) - cosmo.luminosity_distance([z]-h))/2*h
-        delta_dl_pc = delta_dl_Mpc.to(u.pc)
+        """
+        dl = {}
+        for tt in ['', '_p', '_m']:
+            z = zlim['zlim{}'.format(tt)]
+            if z > 0.:
+                dl_Mpc = self.cosmo.luminosity_distance([z])
+                dl_pc = dl_Mpc.to(u.pc)
+                m = 5.*np.log10(dl_pc.to_value()/10) + self.absPeakMag
+            else:
+                m = -999.
+            dl['mag{}'.format(tt)] = np.array(np.mean(m))
 
-        return dl_pc, delta_dl_pc
-
-    def get_mag(self, z):
-
-        dl_pc, delta_dl_pc = self.get_dl(z)
-
-        m = -2.5*np.log10(dl_pc.to_value()**2/10**2) + 19.6
-        delta_m = delta_dl_pc / dl_pc
-
-        return m, delta_m
-
-    def get_df(self, file_name_):
-
-        z_comp, z_comp_sup, z_comp_inf = self.get_z(self.meta_dir, file_name_)
-
-        d = {'z_comp': [z_comp], 'z_comp_max': [
-            z_comp_sup], 'z_comp_min': [z_comp_inf]}
-        return pd.DataFrame(d)
-
-    def get_z(self, diretory, filename):
-
-        z_comp, z_comp_sup, z_comp_inf = Z_bins(metaFitInput=filename,
-                                                inputDir=diretory).get_z()
-        if self.plot:
-            Z_bins(metaFitInput=filename, inputDir=diretory).plot_z_comp()
-
-        return z_comp, z_comp_sup, z_comp_inf
+        return dl
