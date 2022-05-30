@@ -5,6 +5,7 @@ import healpy as hp
 from ztf_metrics.metricUtils import dustMap, seasons, addNight, coaddNight
 from ztf_pipeutils.ztf_hdf5 import Read_LightCurve
 from ztf_simfit_plot.z_bins import Z_bins
+from ztf_metrics.plotUtils import binnedData
 from scipy import interpolate
 
 
@@ -307,17 +308,14 @@ class RedMagMetric:
 
         zmin, zmax = seldata['z'].min(), seldata['z'].max()
         bins = np.arange(zmin, zmax, 0.01)
-        group = seldata.groupby(pd.cut(seldata['z'], bins))
-        bin_centers = (bins[: -1] + bins[1:])/2
-        bin_values = group.apply(
-            lambda x: pd.DataFrame({'c_err': [x['c_err'].mean()], 'c_err_std': [x['c_err'].std()]}))
+        bin_values = binnedData(seldata, bins, 'z', 'c_err')
 
         if len(bin_values) < 2:
             return dict(zip(['zlim', 'zlim_p', 'zlim_m', 'zlim_b'], [np.asarray(-1.0)]*4))
 
         bin_values['c_err_p'] = bin_values['c_err']+bin_values['c_err_std']
         bin_values['c_err_m'] = bin_values['c_err']-bin_values['c_err_std']
-        bin_values['z'] = bin_centers
+        #bin_values['z'] = bin_centers
 
         zlim = {}
         for tt in ['', '_p', '_m']:
