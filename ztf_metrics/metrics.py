@@ -66,24 +66,32 @@ class CadenceMetric:
         df['ebvofMW'] = seldust['ebvofMW'].to_list()[0]
         df['healpixRA'] = seldust['RA'].to_list()[0]
         df['healpixDec'] = seldust['Dec'].to_list()[0]
-        dfm = data.groupby(['season']).apply(
-            lambda x: pd.DataFrame({'time_min': [x['time'].min()], 'time_max': [x['time'].max()]})).reset_index()
+        dfm = data.groupby('season').apply(
+            lambda x: pd.DataFrame({'time_min': [x['time'].min()],
+                                    'time_max': [x['time'].max()]})).reset_index()
+
         df = df.merge(dfm, left_on=['season'], right_on=['season'])
         # df['time_max'] = data.groupby(['season'])['time'].max()
 
-        print(data.groupby(
-            ['season']).apply(lambda x: x['time'].min()))
         # need to coadd by night here
         data_coadded = coaddNight(data.drop(columns=['band']), cols=[
             'night', 'healpixID'])
         data_coadded['band'] = 'ztfall'
+        data_coadded['season'] = data_coadded['season'].astype(int)
         df_b = data_coadded.groupby(['season']).apply(
             lambda x: self.calc_metric(group=x, bands=['ztfall'])).reset_index()
         df = df.merge(df_b, left_on=['season'], right_on=['season'])
+
+        to_calc = ['cadence', 'nb_obs', 'gap', 'season_length', 'skynoise']
         for b in ['ztfg', 'ztfr', 'ztfi']:
-            df_b = data.groupby(['season']).apply(lambda x: self.calc_metric(group=x, bands=[b], colnames=('cad_{}'.format(b), 'nb_obs_{}'.format(b), 'gap_{}'.format(b),
-                                                                                                           'season_length_{}'.format(b), 'skynoise_{}'.format(b)),
-                                                                             to_calc=['cadence', 'nb_obs', 'gap', 'season_length', 'skynoise']))
+            colnames = ('cad_{}'.format(b), 'nb_obs_{}'.format(b),
+                        'gap_{}'.format(b),
+                        'season_length_{}'.format(b), 'skynoise_{}'.format(b))
+            df_b = data.groupby(['season']).apply(lambda x:
+                                                  self.calc_metric(group=x,
+                                                                   bands=[b],
+                                                                   colnames=colnames,
+                                                                   to_calc=to_calc))
             df = df.merge(df_b, left_on=['season'], right_on=['season'])
 
         return df

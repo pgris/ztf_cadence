@@ -11,7 +11,7 @@ def processMetric_multiproc(metricName, df, nproc, nside, coadd_night, npixels=-
     --------------
     metricName: str
       name of the metric
-    df: pandas 
+    df: pandas
       data to process
     nproc: int
       number of procs for multiprocessing
@@ -34,10 +34,17 @@ def processMetric_multiproc(metricName, df, nproc, nside, coadd_night, npixels=-
         healpixIDs = pixelList.split(',')
     else:
         # all the pixels
+
         healpixIDs = ','.join(df['healpixID'].to_list())
         healpixIDs = set(healpixIDs.split(","))
-        healpixIDs = list(filter(lambda a: a != 'None', healpixIDs))
+        healpixIDs = list(filter(lambda a: a != 'pNonep', healpixIDs))
 
+        """
+        ll = df['healpixID'].to_list()
+        import itertools
+        healpixIDs = list(itertools.chain.from_iterable(ll))
+        # healpixIDs = list(set(df['healpixID'].to_list()))
+        """
     # random pixels
     if npixels >= 1:
         import random
@@ -81,6 +88,8 @@ def processMetric(healpixIDs, params={}, j=0, output_q=None):
     nside = params['nside']
     coadd_night = params['coadd_night']
 
+    print('pparams', params)
+
     healpixIDs = set(healpixIDs)
 
     cl = eval('{}(nside={},coadd_night={})'.format(
@@ -90,10 +99,17 @@ def processMetric(healpixIDs, params={}, j=0, output_q=None):
     fracs = range(10, 100, 50)
     prfr = dict(zip(fracs, [1]*len(fracs)))
     print('number of pixels to process', len(healpixIDs))
+    #healpixIDs = ['p144577p']
     for hpix in healpixIDs:
-        dfb = data[data['healpixID'].str.contains(hpix)]
+        # print('processing', hpix, type(hpix))
+        dfb = data[data['healpixID'].str.contains(hpix, regex=False)]
+
+        # print('alors', dfb['healpixID'])
         df_new = dfb.copy()
-        respix = cl.run(int(hpix), df_new, plot=False)
+        if len(df_new) < 10:
+            continue
+        hpix = int(hpix.split('p')[1])
+        respix = cl.run(int(hpix), df_new)
         resdf = pd.concat([resdf, respix])
         frac_processed = 100.*len(resdf)/len(healpixIDs)
         for key, vv in prfr.items():
