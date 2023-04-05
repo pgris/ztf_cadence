@@ -32,7 +32,8 @@ class PlotOS:
         self.hold = hold
         self.nround = nround
 
-    def visu(self, tab, vardisp='color', healpixId='healpixID', title='', inum=1, save=False, min_tab=0, max_tab=100,
+    def visu(self, tab, vardisp='color', healpixId='healpixID', title='',
+             inum=1, save=False, min_tab=0, max_tab=100,
              cbar=True):
         """
         Method to display OS (Mollview)
@@ -69,7 +70,8 @@ class PlotOS:
         tab_masked = self.sel[mk_born]
 
         title += ' / median = {} \n moy = {}'.format(
-            round(tab_masked[vardisp].median(), self.nround), round(tab_masked[vardisp].mean(), self.nround))
+            round(tab_masked[vardisp].median(), self.nround),
+            round(tab_masked[vardisp].mean(), self.nround))
 
         ik = hpxmap > 1.
         area = self.pixArea*len(hpxmap[ik])
