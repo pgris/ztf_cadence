@@ -88,7 +88,7 @@ def processMetric(healpixIDs, params={}, j=0, output_q=None):
     nside = params['nside']
     coadd_night = params['coadd_night']
 
-    print('pparams', params)
+    # print('pparams', params)
 
     healpixIDs = set(healpixIDs)
 
@@ -104,9 +104,8 @@ def processMetric(healpixIDs, params={}, j=0, output_q=None):
         # print('processing', hpix, type(hpix))
         dfb = data[data['healpixID'].str.contains(hpix, regex=False)]
 
-        # print('alors', dfb['healpixID'])
         df_new = dfb.copy()
-        if len(df_new) < 10:
+        if len(df_new) < 10 and metricName != 'RedMagMetric':
             continue
         hpix = int(hpix.split('p')[1])
         respix = cl.run(int(hpix), df_new)

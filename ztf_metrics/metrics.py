@@ -244,8 +244,10 @@ class RedMagMetric:
         healpixID
         season
         """
+
         self.pixnum = pixnum
-        idx = data['healpixID'] == str(pixnum)
+
+        idx = data['healpixID'] == 'p{}p'.format(pixnum)
         data = data[idx]
 
         seasons = data['season'].unique()
@@ -323,12 +325,12 @@ class RedMagMetric:
 
         bin_values['c_err_p'] = bin_values['c_err']+bin_values['c_err_std']
         bin_values['c_err_m'] = bin_values['c_err']-bin_values['c_err_std']
-        #bin_values['z'] = bin_centers
+        # bin_values['z'] = bin_centers
 
         zlim = {}
         for tt in ['', '_p', '_m']:
             zlim['zlim{}'.format(tt)] = self.zlim_interp(
-                bin_values['c_err{}'.format(tt)], bin_centers)
+                bin_values['c_err{}'.format(tt)], bin_values['z'])
 
         zlim['zlim_b'] = np.array(0)
         idx = bin_values['c_err'] >= self.sigmaC
