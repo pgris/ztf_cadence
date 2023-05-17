@@ -5,7 +5,7 @@ from random import randint
 from random import seed
 
 
-def generateObsData(cad_g, cad_r, cad_i, skynoise_g, skynoise_r, skynoise_i, MJD_min, zp_g, zp_r, zp_i, healpixID_min,
+def generateObsData(cad_g, cad_r, cad_i, N_g, N_r, N_i, skynoise_g, skynoise_r, skynoise_i, MJD_min, zp_g, zp_r, zp_i, healpixID_min,
                     healpixID_max, step, seed):
 
     df_tot = pd.DataFrame()
@@ -14,6 +14,7 @@ def generateObsData(cad_g, cad_r, cad_i, skynoise_g, skynoise_r, skynoise_i, MJD
            np.arange(MJD_min+(30/(25*60)), MJD_min+(30/(25*60))+180, cad_i)]
     healpixID = 70905
     skynoise = [skynoise_g, skynoise_r, skynoise_i]
+    nvisits = [N_g, N_r, N_i]
     zp = [zp_g, zp_r, zp_i]
     band = ['ztfg', 'ztfr', 'ztfi']
 
@@ -23,7 +24,7 @@ def generateObsData(cad_g, cad_r, cad_i, skynoise_g, skynoise_r, skynoise_i, MJD
 
         df['time'] = MJD[i]
         df['field'] = 401
-        df['skynoise'] = skynoise[i]
+        df['skynoise'] = skynoise[i]+1.25*np.log10(nvisits[i])
         df['zp'] = zp[i]
         df['rcid'] = 45
         df['band'] = band
